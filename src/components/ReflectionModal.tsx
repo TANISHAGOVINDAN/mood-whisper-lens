@@ -9,7 +9,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Sparkles, Heart, Lightbulb } from 'lucide-react';
+import { Sparkles, Heart, Lightbulb, Volume2, VolumeX } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface ReflectionData {
   dominant_emotion: string;
@@ -42,6 +43,55 @@ const ReflectionModal = ({
   onSave,
   onDiscard,
 }: ReflectionModalProps) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      setSpeechSynthesis(window.speechSynthesis);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && reflection && speechSynthesis) {
+      speakReflection();
+    }
+    return () => {
+      if (speechSynthesis) {
+        speechSynthesis.cancel();
+      }
+    };
+  }, [open, reflection]);
+
+  const speakReflection = () => {
+    if (!speechSynthesis || !reflection) return;
+
+    speechSynthesis.cancel();
+
+    const textToSpeak = `${reflection.reflection_text}. Suggested actions: ${reflection.suggestions.join('. ')}`;
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    speechSynthesis.speak(utterance);
+  };
+
+  const toggleSpeech = () => {
+    if (!speechSynthesis) return;
+
+    if (isSpeaking) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+    } else {
+      speakReflection();
+    }
+  };
+
   if (!reflection) return null;
 
   const emotionEntries = Object.entries(reflection.emotion_scores || {})
@@ -52,9 +102,25 @@ const ReflectionModal = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl">
-            <Sparkles className="w-6 h-6 text-primary" />
-            Your Reflection
+          <DialogTitle className="flex items-center justify-between text-2xl">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-primary" />
+              Your Reflection
+            </div>
+            {speechSynthesis && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSpeech}
+                className="h-8 w-8"
+              >
+                {isSpeaking ? (
+                  <VolumeX className="w-5 h-5" />
+                ) : (
+                  <Volume2 className="w-5 h-5" />
+                )}
+              </Button>
+            )}
           </DialogTitle>
           <DialogDescription>
             Here's what we noticed about your emotional state
